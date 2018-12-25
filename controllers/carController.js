@@ -1,3 +1,4 @@
+const fs = require('fs');
 const multer = require('multer');
 const jimp = require('jimp');
 const jwt = require('jsonwebtoken');
@@ -8,23 +9,26 @@ const httpError = require('http-errors');
 // Models
 const CarModel = require('../models/car');
 const UserModel = require('../models/user');
+const ImageModel = require('../models/car-image');
 const config = require('./../config/config');
 const car_upload_path = path.resolve(__dirname, config.car_upload_path);
+let ObjectId = require('mongoose').Types.ObjectId;
 
-const storage = {
+const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, UPLOAD_PATH);
+    cb(null, car_upload_path);
   },
   filename: function(req, file, cb) {
     console.log(file);
-    const fileName = `${file.fieldname}-${uuid.v4()}`;
+    const extension = `${file.mimetype.split('/').pop()}`;
+    const fileName = `${new Date().getTime()}.${extension}`;
     cb(null, fileName);
     // cb(null, file.fieldname + '-' + Date.now());
   }
-};
+});
 
 const multerOptions = {
-  storage: multer.diskStorage({ storage: storage }),
+  storage: storage,
   fileFilter(req, file, next) {
     const isPhoto = file.mimetype.startsWith('image/');
     if (isPhoto) {
@@ -46,12 +50,12 @@ exports.resize = async (req, res, next) => {
 
   const resizePromises = Array.from(req.files).map(async file => {
     if (file) {
-      const extension = file.mimetype.split('/')[1];
-      const modifiedFile = `${uuid.v4()}.${extension}`;
+      // const extension = file.mimetype.split('/')[1];
+      // const modifiedFile = `${uuid.v4()}.${extension}`;
       const photo = await jimp.read(file.path);
       await photo.resize(config.car_resize_width, jimp.AUTO);
-      await photo.write(`${car_upload_path}/${modifiedFile}`);
-      return modifiedFile;
+      await photo.write(`${car_upload_path}/${file.filename}`);
+      return file.filename;
     }
   });
 
@@ -131,11 +135,26 @@ exports.addCar = async (req, res, next) => {
     isExchangeAccepted,
     warranty
   };
+  const photos = req.body.photos;
+  let images = [];
+  const car_id = new ObjectId();
+  if (photos && photos.length > 0) {
+    const imagePromises = Array.from(photos).map(async item => {
+      const imageItem = {
+        fileName: item,
+        car: car_id,
+        user: createdBy._id
+      };
+      return await ImageModel.create(imageItem);
+    });
+    images = await Promise.all(imagePromises);
+  }
   const newCar = {
+    _id: car_id,
     stocker,
     regulatoryInfo,
     priceWarranty,
-    photos: req.body.photos ? req.body.photos : null,
+    photos: images && images.length > 0 ? images : null, //req.body.photos ? req.body.photos : null,
     duration,
     mileage,
     description,
@@ -170,6 +189,7 @@ exports.getCarById = async (req, res, next) => {
   res.json({ result: car }).status(200);
 };
 
+// UPDATE Car By Id
 exports.updateCarById = async (req, res, next) => {
   const { id } = req.params;
   const updatedItem = req.body;
@@ -201,6 +221,7 @@ exports.updateCarById = async (req, res, next) => {
   res.json({ result: car }).status(202);
 };
 
+// DELETE Car By Id
 exports.deleteCarById = async (req, res, next) => {
   const { id } = req.params;
   if (!/\S/.test(id)) {
@@ -212,7 +233,8 @@ exports.deleteCarById = async (req, res, next) => {
     throw new httpError(400, `Car does not exists for _id - ${id}`);
   }
   let updatedItem = {
-    isDeleted: true
+    isDeleted: true,
+    photos: null
   };
   if (req.token) {
     updatedItem.updatedBy = jwt.decode(req.token);
@@ -224,4 +246,35 @@ exports.deleteCarById = async (req, res, next) => {
   ).exec();
 
   res.json({ success: 'Car is deleted!' }).status(204);
+};
+
+// GET Image By Id
+exports.getImageById = async (req, res, next) => {
+  const { image_id } = req.params;
+  if (!ObjectId.isValid(image_id)) {
+    throw new httpError(400, `Image Object Id is not valid!`);
+  }
+  const image = await ImageModel.findOne({ _id: image_id }).exec();
+  // res.json({ result: image }).status(200);
+  const extension = `${image.fileName.split('.').pop()}`;
+
+  let readStream = fs.createReadStream(
+    path.resolve(__dirname, config.car_upload_path, image.fileName)
+  );
+
+  // When the stream is done being read, end the response
+  readStream.on('close', () => {
+    res.end();
+  });
+
+  // Stream chunks to response
+  res.setHeader('Content-Type', `image/${extension}`);
+  readStream.pipe(res);
+
+  // fs.createReadStream(path.join(config.car_upload_path, image.fileName));//.pipe(res);
+};
+
+exports.getImages = async (req, res, next) => {
+  const images = await ImageModel.find({}).exec();
+  res.json({ result: images }).status(200);
 };

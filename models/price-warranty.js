@@ -4,22 +4,22 @@ const priceWarrantySchema = new mongoose.Schema({
   _id: false,
   amount: {
     type: Number,
-    required: true,
+    // required: true,
     default: 0
   },
   isFixed: {
     type: Boolean,
-    required: true,
+    // required: true,
     default: true
   },
   isExchangeAccepted: {
     type: Boolean,
-    required: true,
+    // required: true,
     default: false
   },
   warranty: {
     type: String,
-    required: true,
+    // required: true,
     default: null
   }
 });

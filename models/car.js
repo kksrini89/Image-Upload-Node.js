@@ -6,7 +6,7 @@ const carSchema = new mongoose.Schema(
     regulatoryInfo: { ref: 'RegulatoryInfo', type: mongoose.Schema.Types.Mixed },
     priceWarranty: { ref: 'PriceWarranty', type: mongoose.Schema.Types.Mixed },
     photos: {
-      type: [String],
+      type: [{ ref: 'Image', type: mongoose.Schema.Types.ObjectId }],
       required: true
     },
     duration: String,

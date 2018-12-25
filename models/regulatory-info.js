@@ -4,20 +4,23 @@ const regulatoryInfoSchema = new mongoose.Schema({
   _id: false,
   registrationPlace: {
     type: String,
-    required: true,
+    // required: true,
     default: null
   },
   insurance_type: {
     type: String,
-    required: true,
+    // required: true,
     default: null
   },
   insurance_year: {
-    type: String,
-    required: true,
-    default: null
+    type: Number,
+    // required: true,
+    default: Date.now
   },
-  insurance_month: { type: String, default: null }
+  insurance_month: {
+    type: Number,
+    default: Date.now
+  }
 });
 
 module.exports = mongoose.model('RegulatoryInfo', regulatoryInfoSchema);
