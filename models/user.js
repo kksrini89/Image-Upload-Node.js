@@ -29,7 +29,9 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['admin', 'subscriber', 'editor'],
     default: 'subscriber'
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpires: Date
 });
 
 userSchema.pre('save', function(next) {

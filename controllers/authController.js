@@ -1,7 +1,8 @@
-const http_error = require('http-errors');
 const fs = require('fs');
-// const bcrypt = require('bcrypt');
 const path = require('path');
+const http_error = require('http-errors');
+const crypto = require('crypto');
+// const bcrypt = require('bcrypt');
 const config = require('../config/config');
 const profile_path = path.join(__dirname, config.profile_upload_path);
 
@@ -49,24 +50,24 @@ exports.register = async (req, res, next) => {
 };
 
 exports.forgotPassword = async (req, res, next) => {
- // 1. See if a user with that email exists
- const user = await User.findOne({ email: req.body.email });
- if (!user) {
-   req.flash('error', 'No account with that email exists.');
-   return res.redirect('/login');
- }
- // 2. Set reset tokens and expiry on their account
- user.resetPasswordToken = crypto.randomBytes(20).toString('hex');
- user.resetPasswordExpires = Date.now() + 3600000; // 1 hour from now
- await user.save();
- // 3. Send them an email with the token
- const resetURL = `http://${req.headers.host}/account/reset/${user.resetPasswordToken}`;
- await mail.send({
-   user,
-   filename: 'password-reset',
-   subject: 'Password Reset',
-   resetURL
- });
+  const { email } = req.body;
+  // 1. See if a user with that email exists
+  const user = await UserModel.findOne({ email: email });
+  if (!user) {
+    throw new http_error(400, `No account with that email exists!`);
+  }
+  // 2. Set reset tokens and expiry on their account
+  user.resetPasswordToken = crypto.randomBytes(20).toString('hex');
+  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour from now
+  await user.save();
+  // 3. Send them an email with the token
+  const resetURL = `http://${req.headers.host}/account/reset/${user.resetPasswordToken}`;
+  await mail.send({
+    user,
+    filename: 'password-reset',
+    subject: 'Password Reset',
+    resetURL
+  });
 };
 
 exports.reset = async (req, res, next) => {
@@ -75,17 +76,16 @@ exports.reset = async (req, res, next) => {
     resetPasswordExpires: { $gt: Date.now() }
   });
   if (!user) {
-    req.flash('error', 'Password reset is invalid or has expired');
-    return res.redirect('/login');
+    throw new http_error(400, 'Password reset is invalid or has expired');
   }
-}
+};
 
 exports.confirmedPasswords = async (req, res, next) => {
   if (req.body.password === req.body['password-confirm']) {
     next(); // keepit going!
     return;
   }
-}
+};
 
 exports.update = async (req, res, next) => {
   const user = await User.findOne({
@@ -103,7 +103,7 @@ exports.update = async (req, res, next) => {
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
   const updatedUser = await user.save();
-}
+};
 
 exports.getUserImage = async (req, res, next) => {
   try {
