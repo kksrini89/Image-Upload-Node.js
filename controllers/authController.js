@@ -1,8 +1,10 @@
-const http_error = require('http-errors');
 const fs = require('fs');
 // const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const path = require('path');
+const http_error = require('http-errors');
+const crypto = require('crypto');
+// const bcrypt = require('bcrypt');
 const config = require('../config/config');
 const mail = require('../handlers/mail');
 const profile_path = path.join(__dirname, config.profile_upload_path);
@@ -82,8 +84,7 @@ exports.reset = async (req, res, next) => {
     resetPasswordExpires: { $gt: Date.now() }
   });
   if (!user) {
-    req.flash('error', 'Password reset is invalid or has expired');
-    return res.redirect('/login');
+    throw new http_error(400, 'Password reset is invalid or has expired');
   }
 };
 
