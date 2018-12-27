@@ -33,13 +33,13 @@ const upload = multer({
 router.post('/register', upload.single('photo'), authController.register);
 router.post('/login', authController.login);
 
-router.post('/account/forgot', catchErrors(authController.forgot));
-router.get('/account/reset/:token', catchErrors(authController.reset));
-router.post('/account/reset/:token',
-  authController.confirmedPasswords,
-  catchErrors(authController.update)
-);
-// router.post('/forgot_password', authController.forgotPassword);
+// router.post('/account/forgot', catchErrors(authController.forgot));
+// router.get('/account/reset/:token', catchErrors(authController.reset));
+// router.post('/account/reset/:token',
+//   authController.confirmedPasswords,
+//   catchErrors(authController.update)
+// );
+router.post('/forgot_password', authController.forgotPassword);
 
 // Get one image by its ID
 router.get('/images/:id', verifyToken, authController.getUserImage);

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const validator = require('validator');
 
 const stage = require('../config/config')[process.env.NODE_ENV];
@@ -37,7 +38,10 @@ userSchema.pre('save', function(next) {
   if (!user.isModified || !user.isNew) {
     next();
   } else {
-    bcrypt.hash(user.password, stage.saltingRounds, function(err, hash) {
+    const cipher = crypto.createCipher(stage.algorithm, stage.secretKey);
+    user.password = cipher.update(user.password, 'utf-8', 'hex') + cipher.final('hex');
+    next();
+    /*bcrypt.hash(user.password, stage.saltingRounds, function(err, hash) {
       if (err) {
         console.log('Error hashing password for user', user.name);
         next(err);
@@ -45,7 +49,7 @@ userSchema.pre('save', function(next) {
         user.password = hash;
         next();
       }
-    });
+    });*/
   }
 });
 
