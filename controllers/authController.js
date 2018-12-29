@@ -1,6 +1,4 @@
 const fs = require('fs');
-// const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const path = require('path');
 const http_error = require('http-errors');
 const crypto = require('crypto');
@@ -54,10 +52,9 @@ exports.register = async (req, res, next) => {
 
 exports.forgotPassword = async (req, res, next) => {
   // 1. See if a user with that email exists
-  const user = await User.findOne({ email: req.body.email });
+  const user = await UserModel.findOne({ email: req.body.email });
   if (!user) {
-    req.flash('error', 'No account with that email exists.');
-    return res.redirect('/login');
+    throw new http_error(400, `No account with that email exists!`);
   }
   const decipher = crypto.createDecipher(
     config.development.algorithm,
@@ -72,10 +69,12 @@ exports.forgotPassword = async (req, res, next) => {
   //  const resetURL = `http://${req.headers.host}/account/reset/${user.resetPasswordToken}`;
   await mail.send({
     user,
-    filename: 'password-reset',
-    subject: 'Password Reset'
-    //  resetURL
+    filename: 'forgot-password',
+    subject: 'Forgot Password',
+    username: user.name,
+    password: user.password
   });
+  res.status(200).json({ success: "Email is sent successfully!"});
 };
 
 exports.reset = async (req, res, next) => {

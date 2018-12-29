@@ -28,7 +28,7 @@ class AuthRepository {
       const decipher = crypto.createDecipher(stage.algorithm, stage.secretKey);
       userItem.password =
         decipher.update(userItem.password, 'hex', 'utf8') + decipher.final('utf8');
-      if (decrypted_password.toString().toLowerCase() !== user.password.toString().toLowerCase()) {
+      if (userItem.password.toString().toLowerCase() !== user.password.toString().toLowerCase()) {
         throw new http_error(404, `Authentication Error - Password does not match!`);
       }
       return userItem;
