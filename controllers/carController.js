@@ -204,7 +204,7 @@ exports.updateCarById = async (req, res, next) => {
     throw new httpError(400, `Please pass the object to be updated!`);
   }
   const existingCarItem = await CarModel.findOne({ _id: id }).exec();
-  if (existingCarItem !== null && existingCarItem !== undefined) {
+  if (existingCarItem == null || existingCarItem == undefined) {
     throw new httpError(400, `Car does not exists for _id - ${id}`);
   }
   if (req.token) {
@@ -257,20 +257,24 @@ exports.getImageById = async (req, res, next) => {
     }
     const image = await ImageModel.findOne({ _id: image_id, image_type: 'car_image' }).exec();
     // res.json({ result: image }).status(200);
-    const extension = `${image.fileName.split('.').pop()}`;
+    if (image == null || image == undefined) {
+      res.status(200).json(null);
+    } else {
+      const extension = `${image.fileName.split('.').pop()}`;
 
-    let readStream = fs.createReadStream(
-      path.resolve(__dirname, config.car_upload_path, image.fileName)
-    );
+      let readStream = fs.createReadStream(
+        path.resolve(__dirname, config.car_upload_path, image.fileName)
+      );
 
-    // When the stream is done being read, end the response
-    readStream.on('close', () => {
-      res.end();
-    });
+      // When the stream is done being read, end the response
+      readStream.on('close', () => {
+        res.end();
+      });
 
-    // Stream chunks to response
-    res.setHeader('Content-Type', `image/${extension}`);
-    readStream.pipe(res);
+      // Stream chunks to response
+      res.setHeader('Content-Type', `image/${extension}`);
+      readStream.pipe(res);
+    }
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

@@ -88,14 +88,14 @@ exports.register = async (req, res, next) => {
     };
     let userResult = await createUser(user);
     if (userResult && userResult.dealer_info && userResult.dealer_info.image) {
-      userResult.dealer_info.image = `${req.protocol}://${req.host}/images/${userResult.dealer_info.image}/dealer_image`;
+      userResult.dealer_info.image = `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${userResult.dealer_info.image}/dealer_image`;
     }
     const token = await generateToken({
       _id: userResult._id,
       name: userResult.name,
       email: userResult.email,
       roles: userResult.roles,
-      photo: `${req.protocol}://${req.host}/images/${userResult.photo}/profile_image`,
+      photo: `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${userResult.photo}/profile_image`,
       dealer_info: userResult.dealer_info
     });
     res
@@ -192,9 +192,10 @@ exports.getImage = async (req, res, next) => {
       const extension = `${user.fileName.split('.').pop()}`;
 
       // const image = `${req.protocol}://${req.host}/images/${userId}`;
+      const folder_path = type == 'dealer_image' ? dealer_path : profile_path;
 
       let readStream = fs.createReadStream(
-        path.resolve(__dirname, config.profile_upload_path, user.fileName)
+        path.resolve(__dirname, folder_path, user.fileName)
       );
 
       // When the stream is done being read, end the response
@@ -250,9 +251,10 @@ exports.resize = async (req, res, next) => {
     if (file) {
       // const extension = file.mimetype.split('/')[1];
       // const modifiedFile = `${uuid.v4()}.${extension}`;
+      const path = (file.fieldname === 'dealer_image') ? dealer_path : profile_path;
       const photo = await jimp.read(file.path);
       await photo.resize(config.profile_width, jimp.AUTO);
-      await photo.write(`${profile_path}/${file.filename}`);
+      await photo.write(`${path}/${file.filename}`);
       return { fieldname: file.fieldname, filename: file.filename };
     }
   });
