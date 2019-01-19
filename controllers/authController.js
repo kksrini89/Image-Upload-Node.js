@@ -1,15 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const http_error = require('http-errors');
+const jimp = require('jimp');
 const crypto = require('crypto');
 // const bcrypt = require('bcrypt');
 const config = require('../config/config');
 const mail = require('../handlers/mail');
 const profile_path = path.join(__dirname, config.profile_upload_path);
+const dealer_path = path.join(__dirname, config.dealer_upload_path);
 
 const { AuthRepository } = require('./../Repository/authRepository');
 const { generateToken } = require('./../utils/util');
 const UserModel = require('./../models/user');
+const ImageModel = require('./../models/car-image');
+let ObjectId = require('mongoose').Types.ObjectId;
 
 exports.login = async (req, res, next) => {
   try {
@@ -18,8 +22,9 @@ exports.login = async (req, res, next) => {
     const token = await generateToken({
       _id: userResult._id,
       name: userResult.name,
-      email: userResult.email
-      // password: userResult.password
+      email: userResult.email,
+      roles: userResult.roles,
+      dealer_info: userResult.dealer_info
     });
     res.status(200).json({ token, _id: userResult._id, user_name: userResult.name });
   } catch (error) {
@@ -28,24 +33,84 @@ exports.login = async (req, res, next) => {
 };
 
 exports.register = async (req, res, next) => {
-  let file = req.file;
+  let files = req.body.photos;
   try {
-    const { name, email, password } = req.body;
-    const user = {
+    const {
       name,
       email,
       password,
-      photo: file ? file.originalname : null
+      dealer_name,
+      showroomName,
+      address,
+      city,
+      state,
+      contact_no
+    } = req.body;
+    const user_id = new ObjectId();
+    let dealer_image_id = null;
+    let profile_image_id = null;
+    if (files !== null && files !== undefined) {
+      const imagePromises = await Array.from(files).map(async file => {
+        if (file) {
+          return await ImageModel.create({
+            fileName: file.filename,
+            image_type: file.fieldname, //'profile_image',
+            car: null,
+            user: user_id
+          });
+        }
+      });
+      const images = await Promise.all(imagePromises);
+      images.map(item => {
+        if (item.image_type === 'dealer_image') {
+          dealer_image_id = item.id;
+        } else {
+          profile_image_id = item.id;
+        }
+        return item;
+      });
+    }
+    const user = {
+      _id: user_id,
+      name,
+      email,
+      password,
+      dealer_info: {
+        name: dealer_name,
+        showroomName,
+        address,
+        city,
+        state,
+        contact_no,
+        image: dealer_image_id
+      },
+      photo: profile_image_id //file ? file : null
     };
-    const userResult = await createUser(user);
-    const token = await generateToken(user);
+    let userResult = await createUser(user);
+    if (userResult && userResult.dealer_info && userResult.dealer_info.image) {
+      userResult.dealer_info.image = `${req.protocol}://${req.host}/images/${userResult.dealer_info.image}/dealer_image`;
+    }
+    const token = await generateToken({
+      _id: userResult._id,
+      name: userResult.name,
+      email: userResult.email,
+      roles: userResult.roles,
+      photo: `${req.protocol}://${req.host}/images/${userResult.photo}/profile_image`,
+      dealer_info: userResult.dealer_info
+    });
     res
-      .json({ token, id: userResult._id, name: userResult.name, email: userResult.email })
+      .json({
+        token,
+        id: userResult._id,
+        name: userResult.name,
+        email: userResult.email,
+        dealer_info: userResult.dealer_info
+      })
       .status(201);
   } catch (error) {
-    if (fs.existsSync(profile_path + file.filename)) {
-      fs.unlinkSync(profile_path + file.filename);
-    }
+    // if (fs.existsSync(profile_path + file.filename)) {
+    //   fs.unlinkSync(profile_path + file.filename);
+    // }
     res.status(400 || error.status).json({ error: error.message });
   }
 };
@@ -74,10 +139,10 @@ exports.forgotPassword = async (req, res, next) => {
     username: user.name,
     password: user.password
   });
-  res.status(200).json({ success: "Email is sent successfully!"});
+  res.status(200).json({ success: 'Email is sent successfully!' });
 };
 
-exports.reset = async (req, res, next) => {
+/*exports.reset = async (req, res, next) => {
   const user = await User.findOne({
     resetPasswordToken: req.params.token,
     resetPasswordExpires: { $gt: Date.now() }
@@ -110,20 +175,36 @@ exports.update = async (req, res, next) => {
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
   const updatedUser = await user.save();
-};
+}; */
 
-exports.getUserImage = async (req, res, next) => {
+exports.getImage = async (req, res, next) => {
   try {
     // Get one image by its ID
-    const { id } = req.params;
-    let user = await UserModel.findOne({ _id: id }).exec();
-    const extension = user.photo.split('.').pop();
+    const { id, type } = req.params;
+    if (!ObjectId.isValid(id)) {
+      throw new httpError(400, `Object Id is not valid!`);
+    }
+    // let user = await UserModel.findOne({ _id: id }).exec();
+    let user = await ImageModel.findOne({ _id: id, image_type: type }).exec();
+    if (user == null || user === undefined) {
+      res.status(200).json(null);
+    } else {
+      const extension = `${user.fileName.split('.').pop()}`;
 
-    // const image = `${req.protocol}://${req.host}/images/${userId}`;
+      // const image = `${req.protocol}://${req.host}/images/${userId}`;
 
-    // stream the image back by loading the file
-    res.setHeader('Content-Type', `image/${extension}`);
-    fs.createReadStream(path.join(profile_path, user.photo)).pipe(res);
+      let readStream = fs.createReadStream(
+        path.resolve(__dirname, config.profile_upload_path, user.fileName)
+      );
+
+      // When the stream is done being read, end the response
+      readStream.on('close', () => {
+        res.end();
+      });
+      // stream the image back by loading the file
+      res.setHeader('Content-Type', `image/${extension}`);
+      readStream.pipe(res);
+    }
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -153,3 +234,31 @@ async function createUser(user) {
     throw error;
   }
 }
+
+exports.resize = async (req, res, next) => {
+  console.log(req.files);
+  // check if there is no new file to resize
+  if (Object.keys(req.files).length === 0) {
+    next(); // skip to the next middleware
+    return;
+  }
+  const { dealer_image, profile_image } = req.files;
+  const [dealer_file] = dealer_image;
+  const [profile_file] = profile_image;
+  // now we resize
+  const resizePromises = Array.from([dealer_file, profile_file]).map(async file => {
+    if (file) {
+      // const extension = file.mimetype.split('/')[1];
+      // const modifiedFile = `${uuid.v4()}.${extension}`;
+      const photo = await jimp.read(file.path);
+      await photo.resize(config.profile_width, jimp.AUTO);
+      await photo.write(`${profile_path}/${file.filename}`);
+      return { fieldname: file.fieldname, filename: file.filename };
+    }
+  });
+
+  req.body.photos = await Promise.all(resizePromises);
+
+  // once we have written the photo to our filesystem, keep going!
+  next();
+};

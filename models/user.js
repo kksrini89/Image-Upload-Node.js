@@ -25,14 +25,20 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 6
   },
-  photo: String,
+  // photo: String,
+  photo: {
+    ref: 'Image',
+    type: mongoose.Schema.Types.Mixed
+  },
   roles: {
     type: String,
     enum: ['admin', 'subscriber', 'editor'],
     default: 'subscriber'
   },
-  resetPasswordToken: String,
-  resetPasswordExpires: Date
+  dealer_info: {
+    ref: 'Dealer_Info',
+    type: mongoose.Schema.Types.Mixed
+  }
 });
 
 userSchema.pre('save', function(next) {

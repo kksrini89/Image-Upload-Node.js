@@ -5,6 +5,11 @@ const imageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  image_type: {
+    type: String,
+    enum: ['car_image', 'profile_image', 'dealer_image'],
+    default: 'car_image'
+  },
   // url: {
   //   type: String,
   //   trim: true,
@@ -13,12 +18,14 @@ const imageSchema = new mongoose.Schema({
   car: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Car',
-    required: true
+    default: null
+    // required: true
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    default: null
+    // required: true
   }
 });
 

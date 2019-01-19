@@ -250,27 +250,30 @@ exports.deleteCarById = async (req, res, next) => {
 
 // GET Image By Id
 exports.getImageById = async (req, res, next) => {
-  const { image_id } = req.params;
-  if (!ObjectId.isValid(image_id)) {
-    throw new httpError(400, `Image Object Id is not valid!`);
+  try {
+    const { image_id } = req.params;
+    if (!ObjectId.isValid(image_id)) {
+      throw new httpError(400, `Image Object Id is not valid!`);
+    }
+    const image = await ImageModel.findOne({ _id: image_id, image_type: 'car_image' }).exec();
+    // res.json({ result: image }).status(200);
+    const extension = `${image.fileName.split('.').pop()}`;
+
+    let readStream = fs.createReadStream(
+      path.resolve(__dirname, config.car_upload_path, image.fileName)
+    );
+
+    // When the stream is done being read, end the response
+    readStream.on('close', () => {
+      res.end();
+    });
+
+    // Stream chunks to response
+    res.setHeader('Content-Type', `image/${extension}`);
+    readStream.pipe(res);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
-  const image = await ImageModel.findOne({ _id: image_id }).exec();
-  // res.json({ result: image }).status(200);
-  const extension = `${image.fileName.split('.').pop()}`;
-
-  let readStream = fs.createReadStream(
-    path.resolve(__dirname, config.car_upload_path, image.fileName)
-  );
-
-  // When the stream is done being read, end the response
-  readStream.on('close', () => {
-    res.end();
-  });
-
-  // Stream chunks to response
-  res.setHeader('Content-Type', `image/${extension}`);
-  readStream.pipe(res);
-
   // fs.createReadStream(path.join(config.car_upload_path, image.fileName));//.pipe(res);
 };
 
