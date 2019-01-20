@@ -24,6 +24,7 @@ exports.login = async (req, res, next) => {
       name: userResult.name,
       email: userResult.email,
       roles: userResult.roles,
+      photo: userResult.photo,
       dealer_info: userResult.dealer_info
     });
     res.status(200).json({ token, _id: userResult._id, user_name: userResult.name });
@@ -89,9 +90,7 @@ exports.register = async (req, res, next) => {
     let userResult = await createUser(user);
     if (userResult && userResult.dealer_info && userResult.dealer_info.image) {
       userResult.dealer_info.image = userResult.dealer_info.image
-        ? `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${
-            userResult.dealer_info.image
-          }/dealer_image`
+        ? userResult.dealer_info.image
         : null;
     }
     const token = await generateToken({
@@ -99,11 +98,7 @@ exports.register = async (req, res, next) => {
       name: userResult.name,
       email: userResult.email,
       roles: userResult.roles,
-      photo: userResult.photo
-        ? `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${
-            userResult.photo
-          }/profile_image`
-        : null,
+      photo: userResult.photo ? userResult.photo : null,
       dealer_info: userResult.dealer_info
     });
     res

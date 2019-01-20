@@ -54,6 +54,6 @@ router.post('/login', authController.login);
 router.post('/forgot_password', authController.forgotPassword);
 
 // Get one image by its ID
-router.get('/images/:id/:type', verifyToken, authController.getImage);
+router.get('/images/:id/:type', authController.getImage);
 
 module.exports = router;

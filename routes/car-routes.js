@@ -18,6 +18,6 @@ router.put('/:id', verifyToken, catchErrors(carController.updateCarById));
 router.delete('/:id', verifyToken, catchErrors(carController.deleteCarById));
 
 router.get('/images/all', verifyToken, catchErrors(carController.getImages));
-router.get('/images/:image_id', verifyToken, catchErrors(carController.getImageById));
+router.get('/images/:image_id', catchErrors(carController.getImageById));
 
 module.exports = router;

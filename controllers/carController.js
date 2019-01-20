@@ -53,7 +53,7 @@ exports.resize = async (req, res, next) => {
       // const extension = file.mimetype.split('/')[1];
       // const modifiedFile = `${uuid.v4()}.${extension}`;
       const photo = await jimp.read(file.path);
-      await photo.resize(config.car_resize_width, jimp.AUTO);
+      await photo.resize(config.car_resize_width, config.car_resize_height); //jimp.AUTO);
       await photo.write(`${car_upload_path}/${file.filename}`);
       return file.filename;
     }
