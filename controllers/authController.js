@@ -88,14 +88,22 @@ exports.register = async (req, res, next) => {
     };
     let userResult = await createUser(user);
     if (userResult && userResult.dealer_info && userResult.dealer_info.image) {
-      userResult.dealer_info.image = `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${userResult.dealer_info.image}/dealer_image`;
+      userResult.dealer_info.image = userResult.dealer_info.image
+        ? `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${
+            userResult.dealer_info.image
+          }/dealer_image`
+        : null;
     }
     const token = await generateToken({
       _id: userResult._id,
       name: userResult.name,
       email: userResult.email,
       roles: userResult.roles,
-      photo: `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${userResult.photo}/profile_image`,
+      photo: userResult.photo
+        ? `${req.protocol}://${req.host}:${process.env.PORT}/api/auth/images/${
+            userResult.photo
+          }/profile_image`
+        : null,
       dealer_info: userResult.dealer_info
     });
     res
@@ -116,30 +124,38 @@ exports.register = async (req, res, next) => {
 };
 
 exports.forgotPassword = async (req, res, next) => {
-  // 1. See if a user with that email exists
-  const user = await UserModel.findOne({ email: req.body.email });
-  if (!user) {
-    throw new http_error(400, `No account with that email exists!`);
+  const { email } = req.body;
+  try {
+    if (!email) {
+      throw new http_error(400, `Email Id is empty!`);
+    }
+    // 1. See if a user with that email exists
+    const user = await UserModel.findOne({ email: req.body.email });
+    if (!user) {
+      throw new http_error(400, `No account with that email exists!`);
+    }
+    const decipher = crypto.createDecipher(
+      config.development.algorithm,
+      config.development.secretKey
+    );
+    user.password = decipher.update(user.password, 'hex', 'utf8') + decipher.final('utf8');
+    // 2. Set reset tokens and expiry on their account
+    //  user.resetPasswordToken = crypto.randomBytes(20).toString('hex');
+    //  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour from now
+    //  await user.save();
+    // 3. Send them an email with the token
+    //  const resetURL = `http://${req.headers.host}/account/reset/${user.resetPasswordToken}`;
+    await mail.send({
+      user,
+      filename: 'forgot-password',
+      subject: 'Forgot Password',
+      username: user.name,
+      password: user.password
+    });
+    res.status(200).json({ success: 'Email is sent successfully!' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
-  const decipher = crypto.createDecipher(
-    config.development.algorithm,
-    config.development.secretKey
-  );
-  user.password = decipher.update(user.password, 'hex', 'utf8') + decipher.final('utf8');
-  // 2. Set reset tokens and expiry on their account
-  //  user.resetPasswordToken = crypto.randomBytes(20).toString('hex');
-  //  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour from now
-  //  await user.save();
-  // 3. Send them an email with the token
-  //  const resetURL = `http://${req.headers.host}/account/reset/${user.resetPasswordToken}`;
-  await mail.send({
-    user,
-    filename: 'forgot-password',
-    subject: 'Forgot Password',
-    username: user.name,
-    password: user.password
-  });
-  res.status(200).json({ success: 'Email is sent successfully!' });
 };
 
 /*exports.reset = async (req, res, next) => {
@@ -194,9 +210,7 @@ exports.getImage = async (req, res, next) => {
       // const image = `${req.protocol}://${req.host}/images/${userId}`;
       const folder_path = type == 'dealer_image' ? dealer_path : profile_path;
 
-      let readStream = fs.createReadStream(
-        path.resolve(__dirname, folder_path, user.fileName)
-      );
+      let readStream = fs.createReadStream(path.resolve(__dirname, folder_path, user.fileName));
 
       // When the stream is done being read, end the response
       readStream.on('close', () => {
@@ -237,7 +251,7 @@ async function createUser(user) {
 }
 
 exports.resize = async (req, res, next) => {
-  console.log(req.files);
+  // console.log(req.files);
   // check if there is no new file to resize
   if (Object.keys(req.files).length === 0) {
     next(); // skip to the next middleware
@@ -251,7 +265,7 @@ exports.resize = async (req, res, next) => {
     if (file) {
       // const extension = file.mimetype.split('/')[1];
       // const modifiedFile = `${uuid.v4()}.${extension}`;
-      const path = (file.fieldname === 'dealer_image') ? dealer_path : profile_path;
+      const path = file.fieldname === 'dealer_image' ? dealer_path : profile_path;
       const photo = await jimp.read(file.path);
       await photo.resize(config.profile_width, jimp.AUTO);
       await photo.write(`${path}/${file.filename}`);
