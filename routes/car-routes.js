@@ -14,7 +14,13 @@ router.post(
   carController.resize,
   catchErrors(carController.addCar)
 );
-router.put('/:id', verifyToken, catchErrors(carController.updateCarById));
+router.put('/:id', verifyToken, catchErrors(carController.updateCarWithoutImage));
+router.put(
+  '/:id/:new_image_count',
+  verifyToken,
+  catchErrors(carController.beforeUpdate),
+  catchErrors(carController.updateCarById)
+);
 router.delete('/:id', verifyToken, catchErrors(carController.deleteCarById));
 
 router.get('/images/all', verifyToken, catchErrors(carController.getImages));

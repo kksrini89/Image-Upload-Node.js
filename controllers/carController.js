@@ -53,12 +53,11 @@ exports.resize = async (req, res, next) => {
       // const extension = file.mimetype.split('/')[1];
       // const modifiedFile = `${uuid.v4()}.${extension}`;
       const photo = await jimp.read(file.path);
-      await photo.resize(config.car_resize_width, config.car_resize_height); //jimp.AUTO);
+      await photo.resize(config.car_resize_width, config.car_resize_height).quality(100); //jimp.AUTO);
       await photo.write(`${car_upload_path}/${file.filename}`);
       return file.filename;
     }
   });
-
   req.body.photos = await Promise.all(resizePromises);
   // const photos = req.body.photos;
 
@@ -189,12 +188,55 @@ exports.getCarById = async (req, res, next) => {
   res.json({ result: car }).status(200);
 };
 
+exports.beforeUpdate = async (req, res, next) => {
+  let { new_image_count } = req.params;
+  new_image_count = +new_image_count;
+  if (new_image_count <= 4) {
+    const imageUpload = multer(multerOptions).fields([
+      { name: 'new_images', maxCount: +new_image_count }
+    ]);
+    console.log(imageUpload);
+    imageUpload(req, res, async function(err) {
+      if (req.files.new_images == undefined) {
+        return next();
+      }
+      if (err) {
+        next('Not able to upload images!');
+      } else {
+        const resizePromises = Array.from(req.files.new_images).map(async file => {
+          if (file) {
+            // const extension = file.mimetype.split('/')[1];
+            // const modifiedFile = `${uuid.v4()}.${extension}`;
+            const photo = await jimp.read(file.path);
+            await photo
+              .resize(config.car_resize_width, config.car_resize_height)
+              .quality(100)
+              .scaleToFit(400, 400); //jimp.AUTO);
+            await photo.write(`${car_upload_path}/${file.filename}`);
+            return file.filename;
+          }
+        });
+        req.body.photos = await Promise.all(resizePromises);
+        console.log(req);
+        return next();
+      }
+    });
+  } else {
+    throw new httpError(400, `New image upload count exceeded!`);
+  }
+};
+
 // UPDATE Car By Id
 exports.updateCarById = async (req, res, next) => {
+  console.log(req);
   const { id } = req.params;
-  const updatedItem = req.body;
+  let updatedItem = req.body;
   if (!/\S/.test(id)) {
     throw new httpError(400, `input parameter id is required!`);
+  }
+  const existingCarItem = await CarModel.findOne({ _id: id }).exec();
+  if (existingCarItem == null || existingCarItem == undefined) {
+    throw new httpError(400, `Car does not exists for _id - ${id}`);
   }
   if (
     typeof updatedItem === 'string' ||
@@ -203,17 +245,213 @@ exports.updateCarById = async (req, res, next) => {
   ) {
     throw new httpError(400, `Please pass the object to be updated!`);
   }
+
+  let new_images = [];
+  let saved_images = [];
+  let images = [];
+  if (
+    updatedItem.photos !== null &&
+    updatedItem.photos !== undefined &&
+    updatedItem.photos.length > 0
+  ) {
+    const photos = updatedItem.photos;
+    if (photos && photos.length > 0) {
+      const imagePromises = Array.from(photos).map(async item => {
+        const imageItem = {
+          fileName: item,
+          car: existingCarItem._id,
+          user: existingCarItem.createdBy._id
+        };
+        return await ImageModel.create(imageItem);
+      });
+      new_images = await Promise.all(imagePromises);
+      new_images = new_images && new_images.length > 0 ? new_images.map(item => item.id) : [];
+    }
+  }
+  if (updatedItem.saved_images != undefined && updatedItem.saved_images.length > 0) {
+    saved_images = updatedItem.saved_images;
+  }
+
+  images = [...new_images, ...saved_images];
+
+  const {
+    make,
+    make_year,
+    model,
+    transmission_type,
+    varriant,
+    kms_driven,
+    number_of_owners,
+    fuel_type,
+    condition,
+    color,
+    vehicle_type,
+    inspection_valid_until,
+    registrationPlace,
+    insurance_type,
+    insurance_year,
+    amount,
+    isFixed,
+    isExchangeAccepted,
+    warranty,
+    duration,
+    mileage,
+    description,
+    isCarAccidental,
+    isCarCertified,
+    isCarFloodAffected
+  } = req.body;
+  const stocker = {
+    make,
+    make_year,
+    model,
+    transmission_type,
+    varriant,
+    kms_driven,
+    number_of_owners,
+    fuel_type,
+    condition,
+    color,
+    vehicle_type,
+    inspection_valid_until
+  };
+
+  const regulatoryInfo = {
+    registrationPlace,
+    insurance_type,
+    insurance_year
+  };
+
+  const priceWarranty = {
+    amount,
+    isFixed,
+    isExchangeAccepted,
+    warranty
+  };
+
+  const updatedCar = {
+    stocker,
+    regulatoryInfo,
+    priceWarranty,
+    photos: images.length > 0 ? images : null,
+    duration,
+    mileage,
+    description,
+    isCarAccidental,
+    isCarCertified,
+    isCarFloodAffected
+  };
+
+  if (req.token) {
+    updatedCar.updatedBy = jwt.decode(req.token).user;
+  }
+  const car = await CarModel.findOneAndUpdate(
+    { _id: id },
+    {
+      $set: updatedCar
+    },
+    { new: true, runValidators: true }
+  ).exec();
+
+  await Promise.all(
+    Array.from(existingCarItem.photos).map(async item => {
+      if (!images.includes(item.toString())) {
+        const imageItem = await ImageModel.findOne({ _id: item }).exec();
+        await ImageModel.findOneAndRemove({ _id: ObjectId(item) }).exec();
+        if (imageItem !== null) {
+          await fs.unlink(path.resolve(car_upload_path, imageItem.fileName));
+        }
+      }
+    })
+  );
+
+  res.json({ result: car }).status(202);
+};
+
+exports.updateCarWithoutImage = async (req, res, next) => {
+  const { id } = req.params;
+  if (!/\S/.test(id)) {
+    throw new httpError(400, `input parameter id is required!`);
+  }
   const existingCarItem = await CarModel.findOne({ _id: id }).exec();
   if (existingCarItem == null || existingCarItem == undefined) {
     throw new httpError(400, `Car does not exists for _id - ${id}`);
   }
+
+  const {
+    make,
+    make_year,
+    model,
+    transmission_type,
+    varriant,
+    kms_driven,
+    number_of_owners,
+    fuel_type,
+    condition,
+    color,
+    vehicle_type,
+    inspection_valid_until,
+    registrationPlace,
+    insurance_type,
+    insurance_year,
+    amount,
+    isFixed,
+    isExchangeAccepted,
+    warranty,
+    duration,
+    mileage,
+    description,
+    isCarAccidental,
+    isCarCertified,
+    isCarFloodAffected
+  } = req.body;
+  const stocker = {
+    make,
+    make_year,
+    model,
+    transmission_type,
+    varriant,
+    kms_driven,
+    number_of_owners,
+    fuel_type,
+    condition,
+    color,
+    vehicle_type,
+    inspection_valid_until
+  };
+
+  const regulatoryInfo = {
+    registrationPlace,
+    insurance_type,
+    insurance_year
+  };
+
+  const priceWarranty = {
+    amount,
+    isFixed,
+    isExchangeAccepted,
+    warranty
+  };
+
+  const updatedCar = {
+    stocker,
+    regulatoryInfo,
+    priceWarranty,
+    duration,
+    mileage,
+    description,
+    isCarAccidental,
+    isCarCertified,
+    isCarFloodAffected
+  };
+
   if (req.token) {
-    updatedItem.updatedBy = jwt.decode(req.token);
+    updatedCar.updatedBy = jwt.decode(req.token).user;
   }
-  const car = await CarModel.findByIdAndUpdate(
+  const car = await CarModel.findOneAndUpdate(
     { _id: id },
     {
-      $set: updatedItem
+      $set: updatedCar
     },
     { new: true, runValidators: true }
   ).exec();
